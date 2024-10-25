@@ -5,7 +5,6 @@ import { getTagsData } from '../services/tagService';
 // Define the getTagData function
 const getCharacterData = catchAsync(async (req: Request, res: Response) => {
     try {
-        console.log(req.params,"req.params")
         const result = await getTagsData();
         res.status(200).json(result);
     }

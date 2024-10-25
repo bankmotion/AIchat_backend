@@ -11,7 +11,6 @@ export const getTagsData = async () => {
     if (error) {
         throw new Error(`Error fetching character data: ${error.message}`);
     }
-    // console.log(data,"data")
    return data
 };
 
