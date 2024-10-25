@@ -1,10 +1,14 @@
 const fs = require('fs-extra');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const dotenv = require('dotenv')
+
+
+dotenv.config()
 
 // Supabase client initialization
-const supabaseUrl = 'https://mvshrdholymztwznzgcv.supabase.co'; // Replace with your Supabase URL
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12c2hyZGhvbHltenR3em56Z2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjkyMTI4MzcsImV4cCI6MjA0NDc4ODgzN30.nGR9a9kCE7uxmLCZEtLM-GE9UZW3FrCzQc3c4vWK0zk'; // Replace with your Supabase anon key
+const supabaseUrl = process.env.SUPABASE_URL || ""; // Replace with your Supabase URL
+const supabaseKey = process.env.SUPABASE_ANON_KEY || "" // Replace with your Supabase anon key
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Log function to standardize logging format
