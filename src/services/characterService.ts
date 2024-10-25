@@ -1,4 +1,4 @@
-import { supabase } from "../config/superbaseConfig"
+import { supabase } from "../config/superbaseConfig";
 
 interface QueryParams {
     page?: string;
@@ -9,129 +9,92 @@ interface QueryParams {
     tag_name?: string;
 }
 
+interface CharacterDataResponse {
+    characterData: any[];
+    size: number;
+    total: number | null;
+}
 
-// Get specific chararcters data
-export const getCharactersData = async (queryParams: QueryParams) => {
-    const { page, search, mode, sort, tag_id, tag_name } = queryParams;
-    console.log(tag_name, "tag_name", typeof (tag_name), mode, "mode")
+const rowsPerPage = 20;
 
-    let realPage = page;
+// Get specific character data
+export const getCharactersData = async (queryParams: QueryParams): Promise<CharacterDataResponse> => {
+    const { page, search, mode, tag_name } = queryParams;
+    const currentPage = parseInt(page || '1');
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage - 1;
 
-    if (tag_name) {
-        let query = supabase.from("characters")
-            .select(`*, character_tags!inner(tags!inner(id, name, join_name))`, { count: 'exact' })
-            .ilike('character_tags.tags.join_name', tag_name.toUpperCase());
+    // Function to create a base query with optional filters
+    const createBaseQuery = async (): Promise<CharacterDataResponse> => {
+        let query = supabase
+            .from("characters")
+            .select(`*, character_tags(tags (id, name, join_name))`, { count: 'exact' });
 
-        // If search is provided, apply filtering
         if (search) {
             query = query.ilike('name', `%${search}%`);
         }
-
-        if (mode == "sfw") {
+        
+        if (mode === "sfw") {
             query = query.eq('is_nsfw', false);
-
-        }
-
-        if (mode == "nsfw") {
+        } else if (mode === "nsfw") {
             query = query.eq('is_nsfw', true);
-            realPage = "1";
         }
 
-        const rowsPerPage = 20;
-        let start = 0;
-        let end = rowsPerPage - 1;
-
-        // Apply pagination if page is provided
-        if (realPage) {
-            const pageNumber = parseInt(realPage || '1');
-            start = (pageNumber - 1) * rowsPerPage;
-            end = start + rowsPerPage - 1;
-            query = query.range(start, end);
-        }
+        query = query.range(start, end);
 
         const { data, error, count } = await query;
-        if (error) {
-            throw new Error(`Error fetching character data: ${error.message}`);
+        if (error) throw new Error(`Error fetching character data: ${error.message}`);
+
+        return {
+            characterData: data || [],
+            size: rowsPerPage,
+            total: count,
+        };
+    };
+
+    // Fetch characters filtered by tag name if provided
+    const fetchByTagName = async (): Promise<CharacterDataResponse> => {
+        let query = supabase
+            .from("characters")
+            .select(`*, character_tags!inner(tags!inner(id, name, join_name))`, { count: 'exact' })
+            .ilike('character_tags.tags.join_name', tag_name!.toUpperCase());
+
+        if (search) {
+            query = query.ilike('name', `%${search}%`);
+        }
+        
+        if (mode === "sfw") {
+            query = query.eq('is_nsfw', false);
+        } else if (mode === "nsfw") {
+            query = query.eq('is_nsfw', true);
         }
 
-        const total = count;
-        const filterData = await Promise.all(
+        query = query.range(start, end);
+
+        const { data, error, count } = await query;
+        if (error) throw new Error(`Error fetching character data: ${error.message}`);
+
+        const filteredData = await Promise.all(
             data?.map(async (item) => {
-                let query = supabase
+                const { data: innerData, error } = await supabase
                     .from("characters")
-                    .select(`*, character_tags(tags (id, name, join_name))`, { count: "exact" });
+                    .select(`*, character_tags(tags (id, name, join_name))`, { count: "exact" })
+                    .ilike("join_name", `%${item.join_name}%`);
 
-                // Apply filter based on item.id
-                query = query.ilike("join_name", `%${item.join_name}%`);
-
-                // Execute the query
-                const { data: filteredData, error, count } = await query;
-
-                // Handle any potential error
-                if (error) {
-                    throw new Error(`Error fetching filtered character data: ${error.message}`);
-                }
-
-                // Return the filtered data for this item
-                return filteredData; // This is an array
-            })
+                if (error) throw new Error(`Error fetching filtered character data: ${error.message}`);
+                return innerData || [];
+            }) || []
         );
 
-        // Flatten the nested arrays into a single-level array
-        const flatFilterData = filterData.flat();
-        const characterData = flatFilterData;
-
         return {
-            characterData,
-            size: rowsPerPage,  // The number of rows per page
-            total,                  // The total number of pages based on count
+            characterData: filteredData.flat(),
+            size: rowsPerPage,
+            total: count,
         };
-    }
-    else {
-        let query = supabase.from("characters")
-            .select(`*, character_tags(tags (id, name))`, { count: 'exact' })
+    };
 
-        // If search is provided, apply filtering
-        if (search) {
-            query = query.ilike('name', `%${search}%`);
-        }
-
-        if (mode == "sfw") {
-            query = query.eq('is_nsfw', false);
-        }
-
-        if (mode == "nsfw") {
-            query = query.eq('is_nsfw', true);
-            realPage = "1";
-        }
-
-
-        const rowsPerPage = 20;
-        let start = 0;
-        let end = rowsPerPage - 1;
-
-        // Apply pagination if page is provided
-        if (realPage) {
-            const pageNumber = parseInt(realPage || '1');
-            start = (pageNumber - 1) * rowsPerPage;
-            end = start + rowsPerPage - 1;
-            query = query.range(start, end);
-        }
-
-        const { data, error, count } = await query;
-        if (error) {
-            throw new Error(`Error fetching character data: ${error.message}`);
-        }
-        const total = count;
-        const characterData = data;
-
-        return {
-            characterData,
-            size: rowsPerPage,  // The number of rows per page
-            total,                  // The total number of pages based on count
-        };
-    }
-
+    // Fetch characters with or without tag name filtering
+    return tag_name ? await fetchByTagName() : await createBaseQuery();
 };
 
-module.exports = { getCharactersData }
+export default getCharactersData;

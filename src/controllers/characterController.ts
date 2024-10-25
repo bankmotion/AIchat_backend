@@ -7,8 +7,8 @@ interface QueryParams {
     search?: string; // Optional
     mode?: string;   // Optional
     sort?: string;   // Optional
-    tag_id?:string;
-    tag_name?:string;
+    tag_id?:string;  // Optional
+    tag_name?:string; // Optional
 }
 
 // Define the getUserData function
