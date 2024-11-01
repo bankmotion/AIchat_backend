@@ -3,7 +3,7 @@ import catchAsync from '../utils/catchAsync'; // Adjust the import path accordin
 import { getTagsData } from '../services/tagService';
 
 // Define the getTagData function
-const getCharacterData = catchAsync(async (req: Request, res: Response) => {
+const getTagData = catchAsync(async (req: Request, res: Response) => {
     try {
         const result = await getTagsData();
         res.status(200).json(result);
@@ -14,4 +14,4 @@ const getCharacterData = catchAsync(async (req: Request, res: Response) => {
     }
 });
 
-export default getCharacterData;
+export default getTagData;
