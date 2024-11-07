@@ -21,7 +21,10 @@ export const updateProfileData = async (params: {
     profile?: string;
     user_name?: string;
     block_list?:object;
+    config?:object;
     id: string;
+    is_nsfw?:boolean,
+    is_blur?:boolean
   }) => {
       const { data, error } = await supabase
         .from("user_profiles")
@@ -31,7 +34,10 @@ export const updateProfileData = async (params: {
           name: params.name,
           profile: params.profile,
           user_name: params.user_name,
-          block_list:params.block_list
+          block_list:params.block_list,
+          config:params.config,
+          is_nsfw:params.is_nsfw,
+          is_blur:params.is_blur
         })
         .eq("id", params.id)
         .select();

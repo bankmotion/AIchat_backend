@@ -83,7 +83,7 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
             .from("characters")
             .select(`*, character_tags!inner(tags!inner(id, name, join_name))`, { count: 'exact' })
             .ilike('character_tags.tags.join_name', tag_name!.toUpperCase())
-            .order('created_at', { ascending: false });;
+            .order('created_at', { ascending: false });
 
         if (search) {
             query = query.ilike('name', `%${search}%`);
