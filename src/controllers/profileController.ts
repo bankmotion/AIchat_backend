@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
 import catchAsync from '../utils/catchAsync'; // Adjust the import path accordingly
-import { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById  } from '../services/profileService';
+import { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById } from '../services/profileService';
 
 // Define the getTagData function
 export const getMyProfileData = catchAsync(async (req: Request, res: Response) => {
     try {
-        const {id} = req.params
-        console.log(id,"id")
+        const { id } = req.params
+        console.log(id, "id")
         const result = await getProfileData();
-        console.log(result,"result")
+        console.log(result, "result")
         res.status(200).json(result);
     }
     catch (error) {
@@ -35,32 +35,32 @@ export const updateMyProfileData = catchAsync(async (req: Request, res: Response
     }
 });
 
-export const getProfileDataById = catchAsync(async(req:Request, res:Response) =>{
-    try{
+export const getProfileDataById = catchAsync(async (req: Request, res: Response) => {
+    try {
         const { profileId } = req.params;
         console.log(profileId, "profileid")
         const result = await getProfileDataByProfileId(profileId);
-        console.log(result,"result")
+        console.log(result, "result")
         res.status(200).json(result);
     }
-    catch(error){
+    catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error fetching profile data by profile id' });
     }
 })
 
-export const getMyBlockList = catchAsync(async(req:Request,res:Response)=>{
-    try{
+export const getMyBlockList = catchAsync(async (req: Request, res: Response) => {
+    try {
         const profileId = req.query.id as string;
         if (!profileId) {
             return res.status(400).json({ message: "Profile ID is required" });
-          }
+        }
         const result = await getMyBlockListById(profileId);
-        console.log(result,"result")
+        console.log(result, "result")
         res.status(200).json(result.block_list);
 
     }
-    catch(error){
+    catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error fetching blocklists data by profile id' });
     }

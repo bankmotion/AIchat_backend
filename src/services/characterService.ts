@@ -7,6 +7,7 @@ interface QueryParams {
     sort?: string;
     tag_id?: string;
     tag_name?: string;
+    is_nsfw?: string;
 }
 
 interface CharacterDataResponse {
@@ -41,47 +42,83 @@ const rowsPerPage = 20;
 
 // Get specific character data
 export const getCharactersAllData = async (queryParams: QueryParams): Promise<CharacterDataResponse> => {
-    const { page, search, mode, tag_name } = queryParams;
+    const { page, search, mode, tag_name, is_nsfw } = queryParams;
     const currentPage = parseInt(page || '1');
     const start = (currentPage - 1) * rowsPerPage;
     const end = start + rowsPerPage - 1;
-
+    console.log(is_nsfw, "isnsfw", typeof (is_nsfw))
     // Function to create a base query with optional filters
     const createBaseQuery = async (): Promise<CharacterDataResponse> => {
-        let query = supabase
-            .from("characters")
-            .select(`*, character_tags(tags (id, name, join_name))`, { count: 'exact' })
-            .order('created_at', { ascending: false });
+
+        if (is_nsfw === "true") {
+            let query = supabase
+                .from("characters")
+                .select(`*, character_tags(tags (id, name, join_name))`, { count: 'exact' })
+                .order('created_at', { ascending: false });
             ;
 
 
-        if (search) {
-            query = query.ilike('name', `%${search}%`);
+            if (search) {
+                query = query.ilike('name', `%${search}%`);
+            }
+
+            if (mode === "sfw") {
+                query = query.eq('is_nsfw', false);
+            } else if (mode === "nsfw") {
+                query = query.eq('is_nsfw', true);
+            }
+
+            query = query.range(start, end);
+
+            const { data, error, count } = await query;
+            if (error) throw new Error(`Error fetching character data: ${error.message}`);
+
+            return {
+                characterData: data || [],
+                size: rowsPerPage,
+                total: count,
+            };
+        }
+        else {
+            let query = supabase
+                .from("characters")
+                .select(`*, character_tags!inner(tags!inner(id, name, join_name, Classification_of_Tag))`)
+                .not('is_nsfw', 'eq', true)
+                .order('created_at', { ascending: false });
+
+            if (search) {
+                query = query.ilike('name', `%${search}%`);
+            }
+
+            query = query.range(start, end);
+
+            const { data: sfwCharacters, error: sfwCharacterError } = await query;
+
+            console.log(is_nsfw, "isnsfw")
+            if (sfwCharacterError) throw new Error(`Error fetching character data: ${sfwCharacterError.message}`);
+
+            // Filter the array to exclude characters with any "NSFW" tag
+            const filteredCharactersByNSFWTag = sfwCharacters.filter(character =>
+                !character.character_tags.some((tag: { tags: { Classification_of_Tag: string; }; }) => tag.tags.Classification_of_Tag === "NSFW")
+            );
+
+            console.log(filteredCharactersByNSFWTag, filteredCharactersByNSFWTag.length, "filteredCharacters.length");
+            let Count: number | null = null; // Ensure the variable is initialized
+            Count = filteredCharactersByNSFWTag.length
+            return {
+                characterData: filteredCharactersByNSFWTag,
+                size: rowsPerPage,
+                total: Count !== null ? Count : 0,
+            };
         }
 
-        if (mode === "sfw") {
-            query = query.eq('is_nsfw', false);
-        } else if (mode === "nsfw") {
-            query = query.eq('is_nsfw', true);
-        }
-
-        query = query.range(start, end);
-
-        const { data, error, count } = await query;
-        if (error) throw new Error(`Error fetching character data: ${error.message}`);
-
-        return {
-            characterData: data || [],
-            size: rowsPerPage,
-            total: count,
-        };
     };
 
     // Fetch characters filtered by tag name if provided
     const fetchByTagName = async (): Promise<CharacterDataResponse> => {
         let query = supabase
             .from("characters")
-            .select(`*, character_tags!inner(tags!inner(id, name, join_name))`, { count: 'exact' })
+            .select(`*, character_tags!inner(tags!inner(id, name, join_name,Classification_of_Tag))`, { count: 'exact' })
             .ilike('character_tags.tags.join_name', tag_name!.toUpperCase())
             .order('created_at', { ascending: false });
 
@@ -97,25 +134,75 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
 
         query = query.range(start, end);
 
-        const { data, error, count } = await query;
-        if (error) throw new Error(`Error fetching character data: ${error.message}`);
 
-        const filteredData = await Promise.all(
-            data?.map(async (item) => {
-                const { data: innerData, error } = await supabase
-                    .from("characters")
-                    .select(`*, character_tags(tags (id, name, join_name))`, { count: "exact" })
-                    .ilike("join_name", `%${item.join_name}%`);
 
-                if (error) throw new Error(`Error fetching filtered character data: ${error.message}`);
-                return innerData || [];
-            }) || []
-        );
+        let characterData;
+
+        if (is_nsfw === "true") {
+            const { data, error, count } = await query;
+
+            if (error) throw new Error(`Error fetching character data: ${error.message}`);
+
+            const filteredData = await Promise.all(
+                data?.map(async (item) => {
+                    const { data: innerData, error } = await supabase
+                        .from("characters")
+                        .select(`*, character_tags(tags (id, name, join_name))`, { count: "exact" })
+                        .eq("id", `${item.id}`);
+
+                    if (error) throw new Error(`Error fetching filtered character data: ${error.message}`);
+                    return innerData || [];
+                }) || []
+            );
+
+            console.log(filteredData.length, "filteredData.length")
+            characterData = filteredData;
+        }
+        else {
+            query = query.not('is_nsfw', 'eq', true);
+            const { data, error, count } = await query;
+
+            if (error) throw new Error(`Error fetching character data: ${error.message}`);
+
+            const filteredData = await Promise.all(
+                (data || []).map(async (item) => {
+                    const { data: innerData, error } = await supabase
+                        .from("characters")
+                        .select(`
+                            *,
+                            character_tags (
+                                tags (
+                                    id,
+                                    name,
+                                    join_name,
+                                    Classification_of_Tag
+                                )
+                            )`,
+                            { count: "exact" }
+                        )
+                        .eq("id", item.id); // Simplified item.id without template literal
+
+                    if (error) throw new Error(`Error fetching filtered character data: ${error.message}`);
+                    return innerData || []; // Ensures innerData is an array
+                })
+            );
+
+            // Flatten the filtered data and filter out characters with NSFW tags
+            characterData = filteredData.flat().filter(character =>
+                character.character_tags && // Check that character_tags exists
+                !character.character_tags.some((tag: { tags: { Classification_of_Tag: string; }; }) =>
+                    tag.tags.Classification_of_Tag === "NSFW"
+                )
+            );
+        }
+
+
+        console.log(characterData.length, "character.length")
 
         return {
-            characterData: filteredData.flat(),
+            characterData: characterData.flat(),
             size: rowsPerPage,
-            total: count,
+            total: characterData ? characterData.length : 0
         };
     };
 
@@ -154,7 +241,7 @@ export const creatingCharacterData = async (params: {
             is_nsfw: params.is_nsfw,
             is_public: params.is_public,
             is_force_remove: false,
-            join_name:params.name,
+            join_name: params.name,
         })
         .select();
 
@@ -318,7 +405,7 @@ export const deleteCharacterDataById = async (characterId: string) => {
         throw new Error(`Error deleting charactertag data: ${tagError.message}`);
     }
 
-    const { data: reviewData, error:reviewError } = await supabase
+    const { data: reviewData, error: reviewError } = await supabase
         .from("reviews")
         .delete()
         .eq('character_id', characterId)
@@ -329,7 +416,7 @@ export const deleteCharacterDataById = async (characterId: string) => {
         throw new Error(`Error deleting charactertag data: ${reviewError.message}`);
     }
 
-    const { data: reportData, error:reportError } = await supabase
+    const { data: reportData, error: reportError } = await supabase
         .from("user_reports")
         .delete()
         .eq('character_id', characterId)
@@ -370,4 +457,75 @@ export const deleteCharacterDataById = async (characterId: string) => {
     }
 }
 
-module.exports = { getCharactersAllData, creatingCharacterData, getCharacterDataById, updateCharacterDataById, deleteCharacterDataById }
+
+export const gettingSimilarCharacters = async (characterId: string, isNsfw: any) => {
+    try {
+        // Fetch the character data with tags
+        const { data: characterData, error: characterError } = await supabase
+            .from("characters")
+            .select("*,character_tags(tags (id, name, join_name))")
+            .eq("id", characterId)
+            .single();
+
+        if (characterError || !characterData) {
+            throw new Error(`Error fetching character data: ${characterError?.message || "No data found"}`);
+        }
+
+        console.log("Character Data:", characterData);
+
+        // Extract the character tags
+        const characterTagNames = characterData.character_tags.map((characterTag: { tags: { join_name: string } }) => {
+            return characterTag.tags.join_name;
+        });
+
+        console.log("Character Tag Names:", characterTagNames);
+
+        // Fetch all characters with tags
+        const { data: allCharacters, error: allCharactersError } = await supabase
+            .from("characters")
+            .select("*,character_tags(tags (id, name, join_name))");
+
+        if (allCharactersError || !allCharacters) {
+            throw new Error(`Error fetching all characters: ${allCharactersError?.message || "No data found"}`);
+        }
+
+        console.log("All Characters Count:", allCharacters.length);
+
+        // Filter similar characters
+        const similarCharacters = allCharacters
+            ?.filter((character) => {
+                const anotherCharacterTagNames = character.character_tags.map(
+                    (characterTag: { tags: { join_name: string } }) => characterTag.tags.join_name
+                );
+
+                const commonTags = anotherCharacterTagNames.filter((tag: string) => characterTagNames.includes(tag));
+                const hasCommonTags = commonTags.length >= 2;
+                const isDifferentCharacter = character.id !== characterData.id;
+
+                return hasCommonTags && isDifferentCharacter;
+            })
+            .map((filteredCharacter) => {
+                console.log("Filtered Character:", filteredCharacter);
+                return filteredCharacter;
+            });
+
+        console.log("Similar Characters Count:", similarCharacters?.length);
+
+        // Further filter based on NSFW flag if needed
+        const isSFW_Characters = similarCharacters?.filter((character) => character.is_nsfw === false);
+
+        console.log("SFW Characters Count:", isSFW_Characters?.length, isNsfw);
+        if (isNsfw == "true") { return similarCharacters; }
+        else {
+            return isSFW_Characters;
+        }
+    } catch (error) {
+        console.error("Error in gettingSimilarCharacters:", error);
+        throw error;
+    }
+};
+
+
+
+
+module.exports = { getCharactersAllData, creatingCharacterData, getCharacterDataById, updateCharacterDataById, deleteCharacterDataById, gettingSimilarCharacters }

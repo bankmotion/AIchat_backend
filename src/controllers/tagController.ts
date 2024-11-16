@@ -10,7 +10,7 @@ const getTagData = catchAsync(async (req: Request, res: Response) => {
     }
     catch (error) {
         console.log(error);
-        res.status(500).json({ message: 'Error fetching character data' });
+        res.status(500).json({ message: 'Error get tags data' });
     }
 });
 

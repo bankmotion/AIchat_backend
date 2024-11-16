@@ -48,7 +48,7 @@ export const postReviewsDataByCharacterId = async (params: PostParams) => {
                 content: params.content,
                 is_like: params.is_like,
                 user_id: params.user_id,
-                character_id:params.character_id
+                character_id: params.character_id
             })
             .select(`*, user_profiles(avatar, name, user_name)`)
             ;
