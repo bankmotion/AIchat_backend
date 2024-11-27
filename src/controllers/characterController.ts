@@ -10,13 +10,14 @@ interface QueryParams {
     tag_id?: string;  // Optional
     tag_name?: string; // Optional
     is_nsfw?: string;
+    user_id?:string;
 }
 
 // Define the getUserData function
 export const getCharactersData = catchAsync(async (req: Request, res: Response) => {
     try {
-        const { page, search, mode, sort, tag_id, tag_name, is_nsfw }: QueryParams = req.query as QueryParams;
-        const result = await getCharactersAllData({ page, search, mode, sort, tag_id, tag_name, is_nsfw });
+        const { page, search, mode, sort, tag_id, tag_name, is_nsfw, user_id }: QueryParams = req.query as QueryParams;
+        const result = await getCharactersAllData({ page, search, mode, sort, tag_id, tag_name, is_nsfw, user_id });
         res.status(200).json(result);
     }
     catch (error) {
@@ -38,7 +39,9 @@ export const createCharacterData = catchAsync(async (req: Request, res: Response
 export const getCharacterData = catchAsync(async (req: Request, res: Response) => {
     try {
         const characterId = req.params.characterId;
-        const result = await getCharacterDataById(characterId);
+        const {userId} = req.query;
+        console.log(userId,"userId")
+        const result = await getCharacterDataById(characterId, userId);
         res.status(200).json(result);
     }
     catch (error) {
@@ -72,8 +75,8 @@ export const deleteCharacterData = catchAsync(async (req: Request, res: Response
 export const getSimilarCharacters = catchAsync(async (req: Request, res: Response) => {
     try {
         const characterId = req.params.characterId;
-        const { isNsfw } = req.query;
-        const result = await gettingSimilarCharacters(characterId, isNsfw);
+        const { user_id, isNsfw } = req.query;
+        const result = await gettingSimilarCharacters(characterId, user_id, isNsfw);
         res.status(200).json(result);
     }
     catch (error) {

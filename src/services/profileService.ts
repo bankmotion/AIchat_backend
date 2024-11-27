@@ -24,7 +24,7 @@ export const updateProfileData = async (params: {
     config?: object;
     id: string;
     is_nsfw?: boolean,
-    is_blur?: boolean
+    is_blur?: boolean,
 }) => {
     const { data, error } = await supabase
         .from("user_profiles")
@@ -77,5 +77,23 @@ export const getMyBlockListById = async (profileId: string) => {
     return data
 }
 
+export const reactivateProfileData = async (
+    user_email: any
+) => {
+    const { data, error } = await supabase
+        .from("user_profiles")
+        .update({
+          is_able:true
+        })
+        .eq("user_email", user_email)
+        .select();
 
-module.exports = { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById }
+    if (error) {
+        throw new Error(`Error updating profile data: ${error.message}`);
+    }
+
+    return data;
+};
+
+
+module.exports = { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById, reactivateProfileData }

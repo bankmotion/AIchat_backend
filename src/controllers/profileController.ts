@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import catchAsync from '../utils/catchAsync'; // Adjust the import path accordingly
-import { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById } from '../services/profileService';
+import { getProfileData, updateProfileData, getProfileDataByProfileId, getMyBlockListById, reactivateProfileData } from '../services/profileService';
 
 // Define the getTagData function
 export const getMyProfileData = catchAsync(async (req: Request, res: Response) => {
@@ -66,10 +66,28 @@ export const getMyBlockList = catchAsync(async (req: Request, res: Response) => 
     }
 })
 
+export const reactivateMyProfileData = catchAsync(async (req: Request, res: Response) => {
+    try {
+        const {user_email} =  req.body;  // Use req.body to capture profile fields
+        console.log(user_email, "user_email");
+
+        // Call updateProfileData without redeclaring types
+        const result = await reactivateProfileData(user_email);
+
+        console.log(result, "result");
+        res.status(200).json(result);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating profile data' });
+    }
+});
+
 
 module.exports = {
     getMyProfileData,
     updateMyProfileData,
     getProfileDataById,
-    getMyBlockList
+    getMyBlockList,
+    reactivateMyProfileData
 }

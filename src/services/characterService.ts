@@ -8,6 +8,7 @@ interface QueryParams {
     tag_id?: string;
     tag_name?: string;
     is_nsfw?: string;
+    user_id?: string;
 }
 
 interface CharacterDataResponse {
@@ -42,11 +43,11 @@ const rowsPerPage = 20;
 
 // Get specific character data
 export const getCharactersAllData = async (queryParams: QueryParams): Promise<CharacterDataResponse> => {
-    const { page, search, mode, tag_name, is_nsfw } = queryParams;
+    const { page, search, mode, tag_name, is_nsfw, user_id } = queryParams;
     const currentPage = parseInt(page || '1');
     const start = (currentPage - 1) * rowsPerPage;
     const end = start + rowsPerPage - 1;
-    console.log(is_nsfw, "isnsfw", typeof (is_nsfw))
+    console.log(is_nsfw, "isnsfw", typeof (is_nsfw), user_id, typeof (user_id))
     // Function to create a base query with optional filters
     const createBaseQuery = async (): Promise<CharacterDataResponse> => {
 
@@ -57,6 +58,12 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                 .order('created_at', { ascending: false });
             ;
 
+            if (user_id) {
+                query = query
+                    .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+            } else {
+                query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
+            }
 
             if (search) {
                 query = query.ilike('name', `%${search}%`);
@@ -71,7 +78,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
             query = query.range(start, end);
 
             const { data, error, count } = await query;
-            if (error) throw new Error(`Error fetching character data: ${error.message}`);
+            if (error) {
+
+                console.log(error?.message)
+                throw new Error(`Error fetching character data: ${error.message}`);
+            }
+
+            console.log(data.length, 'count')
 
             return {
                 characterData: data || [],
@@ -85,6 +98,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                 .select(`*, character_tags!inner(tags!inner(id, name, join_name, Classification_of_Tag))`)
                 .not('is_nsfw', 'eq', true)
                 .order('created_at', { ascending: false });
+
+            if (user_id) {
+                query = query
+                    .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+            } else {
+                query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
+            }
 
             if (search) {
                 query = query.ilike('name', `%${search}%`);
@@ -121,6 +141,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
             .select(`*, character_tags!inner(tags!inner(id, name, join_name,Classification_of_Tag))`, { count: 'exact' })
             .ilike('character_tags.tags.join_name', tag_name!.toUpperCase())
             .order('created_at', { ascending: false });
+
+        if (user_id) {
+            query = query
+                .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+        } else {
+            query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
+        }
 
         if (search) {
             query = query.ilike('name', `%${search}%`);
@@ -290,19 +317,27 @@ export const creatingCharacterData = async (params: {
     return characterDataById[0];
 }
 
-export const getCharacterDataById = async (characterId: string) => {
+export const getCharacterDataById = async (characterId: string, userId:any) => {
 
     let query = supabase.from("characters")
         .select(`*, character_tags(tags (id, name, join_name,slug))`)
         .eq('id', characterId)
+        .single()
         ;
     const { data, error, count } = await query;
     if (error) {
         throw new Error(`Error fetching character data: ${error.message}`);
     }
 
-    console.log(data, "characterDataById")
-    return data[0]
+    if((data.is_public === false && data.creator_id === userId) || (data.is_public === true)){
+        console.log(data, "characterDataById")
+        return data
+    }
+
+    else{
+        throw new Error(`Error fetching character data: invalid user`);
+    }
+    
 };
 
 export const updateCharacterDataById = async ({
@@ -458,7 +493,7 @@ export const deleteCharacterDataById = async (characterId: string) => {
 }
 
 
-export const gettingSimilarCharacters = async (characterId: string, isNsfw: any) => {
+export const gettingSimilarCharacters = async (characterId: string, user_id: any, isNsfw: any) => {
     try {
         // Fetch the character data with tags
         const { data: characterData, error: characterError } = await supabase
@@ -471,19 +506,33 @@ export const gettingSimilarCharacters = async (characterId: string, isNsfw: any)
             throw new Error(`Error fetching character data: ${characterError?.message || "No data found"}`);
         }
 
-        console.log("Character Data:", characterData);
+        // console.log("Character Data:", characterData);
 
         // Extract the character tags
         const characterTagNames = characterData.character_tags.map((characterTag: { tags: { join_name: string } }) => {
             return characterTag.tags.join_name;
         });
 
-        console.log("Character Tag Names:", characterTagNames);
+        // console.log("Character Tag Names:", characterTagNames);
 
         // Fetch all characters with tags
-        const { data: allCharacters, error: allCharactersError } = await supabase
+        // const { data: allCharacters, error: allCharactersError } = await supabase
+        //     .from("characters")
+        //     .select("*,character_tags(tags (id, name, join_name))")
+        //     ;
+
+        let query = supabase
             .from("characters")
-            .select("*,character_tags(tags (id, name, join_name))");
+            .select(`*, character_tags(tags (id, name, join_name))`)
+
+        if (user_id) {
+            query = query
+                .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+        } else {
+            query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
+        }
+
+        const { data: allCharacters, error: allCharactersError } = await query;
 
         if (allCharactersError || !allCharacters) {
             throw new Error(`Error fetching all characters: ${allCharactersError?.message || "No data found"}`);
@@ -505,7 +554,7 @@ export const gettingSimilarCharacters = async (characterId: string, isNsfw: any)
                 return hasCommonTags && isDifferentCharacter;
             })
             .map((filteredCharacter) => {
-                console.log("Filtered Character:", filteredCharacter);
+                // console.log("Filtered Character:", filteredCharacter);
                 return filteredCharacter;
             });
 

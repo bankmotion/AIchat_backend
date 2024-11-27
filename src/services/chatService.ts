@@ -24,7 +24,7 @@ interface messages {
     content: string;
 }
 
-interface OpenAIResponse {
+interface OpenrouterAIResponse {
     id: string;
     object: string;
     created: number;
@@ -44,7 +44,7 @@ interface OpenAIResponse {
     }>;
 }
 
-interface OpenAIError {
+interface OpenrouterAIError {
     code: string;
     message: string;
     param: object | null;
@@ -52,7 +52,7 @@ interface OpenAIError {
     error?: string;
 }
 
-interface OpenAIProxyError {
+interface OpenrouterAIProxyError {
     message: string;
     proxy_note: string;
     stack: string;
@@ -307,8 +307,8 @@ export const generatingMessagesByAdmin = async (messages: messages[], config: co
             referrer: "",
             body: JSON.stringify({
                 model: config.openrouter_model,
-                temperature: parseInt(process.env.DEFAULT_TEMPERATURE || '1'),
-                max_tokens: parseInt(process.env.DEFAULT_MAX_NEW_TOKEN || '300'),
+                temperature: config.generation_settings.temperature,
+                max_tokens: config.generation_settings.max_new_token,
                 stream: false,
                 messages,
             }),
@@ -324,7 +324,7 @@ export const generatingMessagesByAdmin = async (messages: messages[], config: co
         if (result.status !== 200) {
             const response = await result.json();
             if ("error" in response) {
-                const error = response as { error: OpenAIError | OpenAIProxyError | string };
+                const error = response as { error: OpenrouterAIError | OpenrouterAIProxyError | string };
                 if (typeof error.error === "string") {
                     const errorString = error.error;
                     if (errorString === "Unauthorized") {
@@ -340,11 +340,11 @@ export const generatingMessagesByAdmin = async (messages: messages[], config: co
         else {
             let generatedMessage;
             const response = await result.json();
-            console.log(response, "openAIresponse")
+            console.log(response, "openrouterAIResponse")
             if ("choices" in response) {
-                const openAIResponse = response as OpenAIResponse;
-                console.log(openAIResponse.choices[0].message.content, "openAIResponse.choices[0].message.content");
-                generatedMessage = openAIResponse.choices[0].message.content;
+                const openrouterAIResponse = response as OpenrouterAIResponse;
+                console.log(openrouterAIResponse.choices[0].message.content, "openrouterAIResponse.choices[0].message.content");
+                generatedMessage = openrouterAIResponse.choices[0].message.content;
             }
 
             const updatedCount = user.admin_api_usage_count + 1;
