@@ -54,13 +54,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
         if (is_nsfw === "true") {
             let query = supabase
                 .from("characters")
-                .select(`*, character_tags(tags (id, name, join_name))`, { count: 'exact' })
+                .select(`*, character_tags(tags (id, name, join_name, slug))`, { count: 'exact' })
                 .order('created_at', { ascending: false });
             ;
 
             if (user_id) {
                 query = query
-                    .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+                    .or(`and(creator_id.eq.${user_id})`);
             } else {
                 query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
             }
@@ -75,13 +75,23 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                 query = query.eq('is_nsfw', true);
             }
 
+            const { count } = await query;
+
             query = query.range(start, end);
 
-            const { data, error, count } = await query;
+            const { data, error} = await query;
             if (error) {
 
                 console.log(error?.message)
-                throw new Error(`Error fetching character data: ${error.message}`);
+                if (error?.message == "Requested range not satisfiable") {
+                    return {
+                        characterData: [],
+                        size: rowsPerPage,
+                        total: count,
+                    };
+                }
+                else
+                    throw new Error(`Error fetching character data: ${error.message}`);
             }
 
             console.log(data.length, 'count')
@@ -95,13 +105,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
         else {
             let query = supabase
                 .from("characters")
-                .select(`*, character_tags!inner(tags!inner(id, name, join_name, Classification_of_Tag))`)
+                .select(`*, character_tags!inner(tags!inner(id, name, join_name, Classification_of_Tag, slug))`)
                 .not('is_nsfw', 'eq', true)
                 .order('created_at', { ascending: false });
 
             if (user_id) {
                 query = query
-                    .or(`and(is_public.eq.true),and(is_public.eq.false,creator_id.eq.${user_id})`);
+                    .or(`and(creator_id.eq.${user_id})`);
             } else {
                 query = query.eq('is_public', true); // If no user_id, just filter by is_public=true
             }
@@ -110,9 +120,13 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                 query = query.ilike('name', `%${search}%`);
             }
 
-            query = query.range(start, end);
+            // query = query.range(start, end);
+
+            // console.log(start,end,"start,end")
 
             const { data: sfwCharacters, error: sfwCharacterError } = await query;
+
+            console.log("sfwCharacters", sfwCharacters?.length)
 
             console.log(is_nsfw, "isnsfw")
             if (sfwCharacterError) throw new Error(`Error fetching character data: ${sfwCharacterError.message}`);
@@ -122,11 +136,11 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                 !character.character_tags.some((tag: { tags: { Classification_of_Tag: string; }; }) => tag.tags.Classification_of_Tag === "NSFW")
             );
 
-            console.log(filteredCharactersByNSFWTag, filteredCharactersByNSFWTag.length, "filteredCharacters.length");
+            console.log(filteredCharactersByNSFWTag.length, "filteredCharacters.length");
             let Count: number | null = null; // Ensure the variable is initialized
             Count = filteredCharactersByNSFWTag.length
             return {
-                characterData: filteredCharactersByNSFWTag,
+                characterData: filteredCharactersByNSFWTag.slice(start, end),
                 size: rowsPerPage,
                 total: Count !== null ? Count : 0,
             };
@@ -138,7 +152,7 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
     const fetchByTagName = async (): Promise<CharacterDataResponse> => {
         let query = supabase
             .from("characters")
-            .select(`*, character_tags!inner(tags!inner(id, name, join_name,Classification_of_Tag))`, { count: 'exact' })
+            .select(`*, character_tags!inner(tags!inner(id, name, join_name,Classification_of_Tag,slug))`, { count: 'exact' })
             .ilike('character_tags.tags.join_name', tag_name!.toUpperCase())
             .order('created_at', { ascending: false });
 
@@ -202,7 +216,7 @@ export const getCharactersAllData = async (queryParams: QueryParams): Promise<Ch
                                     id,
                                     name,
                                     join_name,
-                                    Classification_of_Tag
+                                    Classification_of_Tag, slug
                                 )
                             )`,
                             { count: "exact" }
@@ -317,7 +331,7 @@ export const creatingCharacterData = async (params: {
     return characterDataById[0];
 }
 
-export const getCharacterDataById = async (characterId: string, userId:any) => {
+export const getCharacterDataById = async (characterId: string, userId: any) => {
 
     let query = supabase.from("characters")
         .select(`*, character_tags(tags (id, name, join_name,slug))`)
@@ -329,15 +343,15 @@ export const getCharacterDataById = async (characterId: string, userId:any) => {
         throw new Error(`Error fetching character data: ${error.message}`);
     }
 
-    if((data.is_public === false && data.creator_id === userId) || (data.is_public === true)){
+    if ((data.is_public === false && data.creator_id === userId) || (data.is_public === true)) {
         console.log(data, "characterDataById")
         return data
     }
 
-    else{
+    else {
         throw new Error(`Error fetching character data: invalid user`);
     }
-    
+
 };
 
 export const updateCharacterDataById = async ({
@@ -440,6 +454,17 @@ export const deleteCharacterDataById = async (characterId: string) => {
         throw new Error(`Error deleting charactertag data: ${tagError.message}`);
     }
 
+    const { data: chatData, error: chatError } = await supabase
+        .from("chats")
+        .delete()
+        .eq('character_id', characterId)
+        .select()
+    console.log(chatData, chatError, "chatData")
+
+    if (chatError) {
+        throw new Error(`Error deleting charactertag data: ${chatError.message}`);
+    }
+
     const { data: reviewData, error: reviewError } = await supabase
         .from("reviews")
         .delete()
@@ -498,7 +523,7 @@ export const gettingSimilarCharacters = async (characterId: string, user_id: any
         // Fetch the character data with tags
         const { data: characterData, error: characterError } = await supabase
             .from("characters")
-            .select("*,character_tags(tags (id, name, join_name))")
+            .select("*,character_tags(tags (id, name, join_name, slug))")
             .eq("id", characterId)
             .single();
 
@@ -523,7 +548,7 @@ export const gettingSimilarCharacters = async (characterId: string, user_id: any
 
         let query = supabase
             .from("characters")
-            .select(`*, character_tags(tags (id, name, join_name))`)
+            .select(`*, character_tags(tags (id, name, join_name, slug))`)
 
         if (user_id) {
             query = query
